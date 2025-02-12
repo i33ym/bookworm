@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"api.bookworm.cc/routes/handlers"
+	"api.bookworm.cc/routes/middlewares"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -21,10 +22,11 @@ func NewRoutes(logger *log.Logger) *Routes {
 func (routes *Routes) API() http.Handler {
 	mux := httprouter.New()
 	handlers := handlers.NewHandlers(routes.logger)
+	middlewares := middlewares.NewMiddlewares(routes.logger)
 
 	mux.HandlerFunc(http.MethodGet, "/v1/healthcheck", handlers.Healthcheck)
 	mux.HandlerFunc(http.MethodGet, "/v1/books/:id", handlers.ViewBook)
 	mux.HandlerFunc(http.MethodPost, "/v1/books", handlers.CreateBook)
 
-	return mux
+	return middlewares.LogRequest(mux)
 }
