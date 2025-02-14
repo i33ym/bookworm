@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"api.bookworm.cc/internal/format"
+	"api.bookworm.cc/internal/validator"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -22,7 +23,17 @@ type Book struct {
 	Year      int       `json:"year_of_publish,omitempty"`
 }
 
+func (book *Book) Validate(v *validator.Validator) {
+	v.Check(validator.MinCharacters(book.Title, 5), "title", "must be at least 5 characters long")
+	v.Check(validator.MaxCharacters(book.Title, 100), "title", "must not be greater than 100 characters long")
+	v.Check(book.Year > 1439, "year", "must be at least 1440")
+	currentYear := time.Now().Year()
+	v.Check(book.Year <= currentYear, "year", fmt.Sprintf("must not be greater than %d", currentYear))
+}
+
 func (handlers *Handlers) CreateBook(response http.ResponseWriter, request *http.Request) {
+	f := format.NewFormat(handlers.logger)
+
 	type input struct {
 		Title     string   `json:"title"`
 		Authors   []string `json:"authors"`
@@ -35,8 +46,7 @@ func (handlers *Handlers) CreateBook(response http.ResponseWriter, request *http
 	temp := &input{}
 
 	if err := format.Read(request, temp); err != nil {
-		response.WriteHeader(http.StatusBadRequest)
-		response.Write([]byte("Bad Request\n"))
+		f.BadRequest(response, request)
 		return
 	}
 
@@ -49,6 +59,14 @@ func (handlers *Handlers) CreateBook(response http.ResponseWriter, request *http
 		Pages:     temp.Pages,
 		Publisher: temp.Publisher,
 		Year:      temp.Year,
+	}
+
+	v := validator.NewValidator()
+	book.Validate(v)
+	
+	if !v.IsValid() {
+		f.UnprocessableEntity(response, v.Errors())
+		return
 	}
 
 	headers := make(http.Header)
